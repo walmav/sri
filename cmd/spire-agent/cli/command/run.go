@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/hcl"
 
 	"github.com/spiffe/sri/helpers"
@@ -65,7 +66,17 @@ func (*RunCommand) Run(args []string) int {
 	// TODO: Handle graceful shutdown?
 	signalListener(config.ErrorCh)
 
-	a := &agent.Agent{Config: config}
+	pluginLogger := &hclog.New(&hclog.LoggerOptions{
+		Name:  "pluginLogger",
+		Level: hclog.LevelFromString("DEBUG"),//TODO walmav match config loglevel
+	})
+
+	pluginCatalog := helpers.NewPluginCatalog(&helpers.PluginCatalogConfig{
+		PluginConfDirectory: config.PluginDir,
+		Logger:              pluginLogger})
+	a := &agent.New(&agent.AgentConfig{
+		Config:        config,
+		PluginCatalog: pluginCatalog})
 	err = a.Run()
 	if err != nil {
 		config.Logger.Log("msg", err.Error())

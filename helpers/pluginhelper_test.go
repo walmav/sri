@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+
 type MockGRPCClient struct {
 	mock.Mock
 }

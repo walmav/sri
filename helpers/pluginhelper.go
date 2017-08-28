@@ -16,18 +16,27 @@ import (
 )
 
 type PluginCatalog struct {
-	PluginConfDirectory string
 	pluginTypeMap       map[string]plugin.Plugin
 	maxPluginTypeMap    map[string]int
 	pluginConfigs       map[string]*PluginConfig
 	PluginClientsByName map[string]*PluginClients
-	Logger              interface{}
+	pcc *PluginCatalogConfig
+}
+
+func NewPluginCatalog(cc *PluginCatalogConfig) (pc *PluginCatalog)  {
+	pc = &PluginCatalog{pcc:cc}
+	return
+}
+type PluginCatalogConfig struct{
+	PluginConfDirectory string
+	Logger              hclog.Logger
 }
 
 type PluginClients struct {
 	Type         string
 	PluginClient interface{}
 }
+
 
 type Plugin interface {
 	Configure(*sriplugin.ConfigureRequest) (*sriplugin.ConfigureResponse, error)
@@ -37,7 +46,7 @@ type Plugin interface {
 func (c *PluginCatalog) loadConfig() (err error) {
 	c.pluginConfigs = make(map[string]*PluginConfig)
 	PluginTypeCount := make(map[string]int)
-	configFiles, err := ioutil.ReadDir(c.PluginConfDirectory)
+	configFiles, err := ioutil.ReadDir(c.pcc.PluginConfDirectory)
 	if err != nil {
 		return err
 	}
@@ -45,7 +54,7 @@ func (c *PluginCatalog) loadConfig() (err error) {
 	for _, configFile := range configFiles {
 		pluginConfig := &PluginConfig{}
 		err := pluginConfig.ParseConfig(filepath.Join(
-			c.PluginConfDirectory, configFile.Name()))
+			c.pcc.PluginConfDirectory, configFile.Name()))
 		if err != nil {
 			return err
 		}
@@ -89,6 +98,11 @@ func (c *PluginCatalog) GetPluginsByType(typeName string) (pluginClients []inter
 	}
 	return
 }
+func (c *PluginCatalog) GetAllPlugins() (pluginClients map[string]*PluginClients)  {
+	pluginClients = c.PluginClientsByName
+	return
+
+}
 
 func (c *PluginCatalog) initClients() (err error) {
 
@@ -129,7 +143,7 @@ func (c *PluginCatalog) initClients() (err error) {
 
 				SecureConfig: secureConfig,
 
-				Logger: c.Logger.(hclog.Logger),
+				Logger: c.pcc.Logger,
 			})
 
 			protocolClient, err := client.Client()
