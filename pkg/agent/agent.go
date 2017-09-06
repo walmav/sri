@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"github.com/spiffe/spire/pkg/common"
 )
 
 var (
@@ -77,14 +78,17 @@ type Config struct {
 }
 
 type Agent struct {
-	BaseSVID    []byte
-	key         *ecdsa.PrivateKey
-	BaseSVIDTTL int32
+	BaseSVID            []byte
+	registrationEntries []*common.RegistrationEntry
+	key                 *ecdsa.PrivateKey
+	BaseSVIDTTL         int32
 
 	Catalog *helpers.PluginCatalog
 	Config  *Config
 
 	grpcServer *grpc.Server
+
+	Cache Cache
 }
 
 // Run the agent
@@ -118,6 +122,7 @@ func (a *Agent) Run() error {
 			return <-a.Config.ErrorCh
 		}
 	}
+	a.Cache = NewCache()
 }
 
 func (a *Agent) initPlugins() error {
@@ -191,7 +196,7 @@ func (a *Agent) bootstrap() error {
 			return err
 		}
 
-		err = a.LoadBaseSVID()
+		err = a.loadBaseSVID()
 		if err != nil {
 			return err
 		}
@@ -212,16 +217,16 @@ func (a *Agent) bootstrap() error {
 		}
 		a.key = key
 
-		// If we're here, we need to Attest/Re-Attest
-		return a.Attest()
+		// If we're here, we need to attest/Re-attest
+		return a.attest()
 	}
 
 	a.Config.Logger.Log("msg", "Bootstrapping done")
 	return nil
 }
 
-// Attest the agent, obtain a new Base SVID
-func (a *Agent) Attest() error {
+// attest the agent, obtain a new Base SVID
+func (a *Agent) attest() error {
 	a.Config.Logger.Log("msg", "Preparing to attest against %s", a.Config.ServerAddress.String())
 
 	// Look up the node attestor plugin
@@ -241,7 +246,7 @@ func (a *Agent) Attest() error {
 	if err != nil {
 		return fmt.Errorf("Failed to form SPIFFE ID: %s", err)
 	}
-	csr, err := a.GenerateCSR(id)
+	csr, err := a.generateCSR(id,a.key)
 	if err != nil {
 		return fmt.Errorf("Failed to generate CSR for attestation: %s", err)
 	}
@@ -277,6 +282,7 @@ func (a *Agent) Attest() error {
 		return fmt.Errorf("Failed attestation against spire server: %s", err)
 	}
 
+	a.registrationEntries = serverResponse.SvidUpdate.RegistrationEntries
 	// Pull base SVID out of the response
 	svids := serverResponse.SvidUpdate.Svids
 	if len(svids) > 1 {
@@ -289,14 +295,14 @@ func (a *Agent) Attest() error {
 
 	a.BaseSVID = svid.SvidCert
 	a.BaseSVIDTTL = svid.Ttl
-	a.StoreBaseSVID()
+	a.storeBaseSVID()
 	a.Config.Logger.Log("msg", "Attestation complete")
 	return nil
 }
 
 // Generate a CSR for the given SPIFFE ID
-func (a *Agent) GenerateCSR(spiffeID *url.URL) ([]byte, error) {
-	a.Config.Logger.Log("msg", "Generating CSR", "SPIFFE_ID", spiffeID.String())
+func (a *Agent) generateCSR(spiffeID *url.URL, key *ecdsa.PrivateKey) ([]byte, error) {
+	a.Config.Logger.Log("msg", "Generating a CSR for %s", spiffeID.String())
 
 	uriSANs, err := uri.MarshalUriSANs([]string{spiffeID.String()})
 	if err != nil {
@@ -314,7 +320,7 @@ func (a *Agent) GenerateCSR(spiffeID *url.URL) ([]byte, error) {
 		ExtraExtensions:    uriSANExtension,
 	}
 
-	csr, err := x509.CreateCertificateRequest(rand.Reader, csrData, a.key)
+	csr, err := x509.CreateCertificateRequest(rand.Reader, csrData, key)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +329,7 @@ func (a *Agent) GenerateCSR(spiffeID *url.URL) ([]byte, error) {
 }
 
 // Read base SVID from data dir and load it
-func (a *Agent) LoadBaseSVID() error {
+func (a *Agent) loadBaseSVID() error {
 	a.Config.Logger.Log("msg", "Loading base SVID from disk")
 
 	certPath := path.Join(a.Config.DataDir, "base_svid.crt")
@@ -348,7 +354,7 @@ func (a *Agent) LoadBaseSVID() error {
 }
 
 // Write base SVID to storage dir
-func (a *Agent) StoreBaseSVID() {
+func (a *Agent) storeBaseSVID() {
 	certPath := path.Join(a.Config.DataDir, "base_svid.crt")
 	f, err := os.Create(certPath)
 	defer f.Close()
@@ -362,6 +368,49 @@ func (a *Agent) StoreBaseSVID() {
 
 	return
 }
+
+func (a *Agent) FetchSVID() error {
+
+	spiffePeer := SPIFFEPeer{TrustDomian: a.Config.TrustDomain}
+	tlsConfig := &tls.Config{
+		VerifyPeerCertificate: spiffePeer.VerifyPeerCertificate,
+		RootCAs:               a.Config.TrustBundle,
+		InsecureSkipVerify:    true,
+	}
+	dialCreds := grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
+
+	conn, err := grpc.Dial(a.Config.ServerAddress.String(), dialCreds)
+	if err != nil {
+		return fmt.Errorf("Could not connect to: %v", err)
+	}
+	defer conn.Close()
+	c := node.NewNodeClient(conn)
+
+
+	for _, registrationEntry := range a.registrationEntries {
+
+		key, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+		if err != nil {
+			return err
+		}
+		id, err := url.Parse(registrationEntry.SpiffeId)
+		if err != nil {
+			return err
+		}
+		csr, err := a.generateCSR(id,key)
+
+
+
+
+		Cache.SetEntry(&CacheEntry{registrationEntry:registrationEntry, SVID:SVID,privateKey:pkey})
+	}
+
+	// Perform attestation
+	req := &node.FetchSVIDRequest{}
+
+}
+
+
 
 func (a *Agent) stopPlugins() {
 	a.Config.Logger.Log("msg", "Stopping plugins...")

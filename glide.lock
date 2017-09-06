@@ -1,5 +1,5 @@
-hash: eed7da5e6da71957b6562f29b0ead79aa3ce3b70c4a677c9d227f1f0296876b7
-updated: 2017-09-06T20:43:33.797180968Z
+hash: 495820248c198a572a98901a74eb1e1dc8d7cafad976743f6016785dac0f4c72
+updated: 2017-09-05T12:57:50.561503274-07:00
 imports:
 - name: github.com/armon/go-radix
   version: 1fca145dffbcaa8fe914309b1ec0cfc67500fe61
@@ -91,10 +91,9 @@ imports:
   subpackages:
   - context
 - name: github.com/spiffe/go-spiffe
-  version: 46cbe92c8d75fb47dd3e3bedf3d0d08ce23336be
+  version: 3757acfee6e16f97518b0daba17209811f404bcf
   subpackages:
   - spiffe
-  - tls
   - uri
 - name: golang.org/x/net
   version: 1c05540f6879653db88113bc4a2b70aec4bd491f
