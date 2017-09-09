@@ -6,7 +6,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/spiffe/sri/pkg/common"
+	"github.com/spiffe/spire/pkg/common"
+	"github.com/spiffe/spire/pkg/api/node"
+	"crypto/ecdsa"
 )
 
 type selectors []*common.Selector
@@ -22,9 +24,9 @@ func (s selectors) Less(i, j int) bool {
 }
 
 type CacheEntry struct {
-	registrationEntry common.RegistrationEntry
-	SVID              []byte
-	privateKey        []byte
+	registrationEntry *common.RegistrationEntry
+	SVID              *node.Svid
+	privateKey        *ecdsa.PrivateKey
 }
 
 type Cache interface {
