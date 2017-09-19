@@ -218,8 +218,26 @@ func (server *Server) initEndpoints() error {
 	nodeSvc = node.ServiceLoggingMiddleWare(server.Config.Log)(nodeSvc)
 	nodeEnpoints := getNodeEndpoints(nodeSvc)
 
+	crtRes, err := server.dependencies.ServerCAImpl.FetchCertificate(&ca.FetchCertificateRequest{})
+	if err != nil {
+		return nil
+	}
+	certChain := [][]byte{server.svid.Raw, crtRes.StoredIntermediateCert}
+	tlsCert := &tls.Certificate{
+		Certificate: certChain,
+		PrivateKey:  server.privateKey,
+	}
+
+	certpool := x509.NewCertPool()
+	intermCert, err := x509.ParseCertificate(crtRes.StoredIntermediateCert)
+	if err != nil {
+		return nil
+	}
+	certpool.AddCert(intermCert)
 	tlsConfig := &tls.Config{
-		GetConfigForClient: server.ClientConfig,
+		Certificates: []tls.Certificate{*tlsCert},
+		ClientCAs:    certpool,
+		ClientAuth:   tls.RequestClientCert,
 	}
 
 	server.grpcServer = grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
@@ -266,26 +284,6 @@ func (server *Server) initEndpoints() error {
 	}()
 
 	return nil
-}
-
-func (server *Server) ClientConfig(info *tls.ClientHelloInfo) (*tls.Config, error) {
-
-	// TODO: Fix me after server refactor
-	crtRes, err := server.dependencies.ServerCAImpl.FetchCertificate(&ca.FetchCertificateRequest{})
-	if err != nil {
-		return nil, err
-	}
-	certChain := [][]byte{server.svid.Raw, crtRes.StoredIntermediateCert}
-	tlsCert := &tls.Certificate{
-		Certificate: certChain,
-		PrivateKey:  server.privateKey,
-	}
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{*tlsCert},
-	}
-
-	return tlsConfig, nil
-
 }
 
 func (server *Server) rotateSVID() (*x509.Certificate, *ecdsa.PrivateKey, error) {
