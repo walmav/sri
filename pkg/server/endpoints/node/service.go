@@ -10,8 +10,13 @@ import (
 	"github.com/spiffe/spire/pkg/server/ca"
 	"github.com/spiffe/spire/pkg/server/nodeattestor"
 	"github.com/spiffe/spire/services"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 	"reflect"
 	"sort"
+	//"github.com/spiffe/go-spiffe/spiffe"
+	//"github.com/spiffe/go-spiffe/uri"
+	"fmt"
 )
 
 // Implement yor service methods methods.
@@ -134,6 +139,16 @@ func (no *stubNodeService) FetchBaseSVID(ctx context.Context, request pb.FetchBa
 
 // Implement the business logic of FetchSVID
 func (no *stubNodeService) FetchSVID(ctx context.Context, request pb.FetchSVIDRequest) (response pb.FetchSVIDResponse) {
+	ctxPeer, _ := peer.FromContext(ctx)
+	ctxtype :=reflect.TypeOf(ctxPeer.AuthInfo).String()
+	tlsInfo, ok := ctxPeer.AuthInfo.(credentials.TLSInfo)
+
+	if ok {
+		for _, cert := range tlsInfo.State.PeerCertificates {
+			fmt.Println(cert,ctxtype)
+		}
+
+	}
 	return response
 }
 

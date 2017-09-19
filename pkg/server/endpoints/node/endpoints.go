@@ -52,7 +52,7 @@ func NewEndpoint(svc NodeService) (ep Endpoints) {
 
 // MakeFetchBaseSVIDEndpoint returns an endpoint that invokes FetchBaseSVID on the service.
 // Primarily useful in a server.
-func MakeFetchBaseSVIDEndpoint(svc NodeService) (ep endpoint.Endpoint) {
+func  MakeFetchBaseSVIDEndpoint(svc NodeService) (ep endpoint.Endpoint) {
 	return func(ctx context.Context, request interface{}) (interface{}, error) {
 		req := request.(FetchBaseSVIDRequest)
 		response, err := svc.FetchBaseSVID(ctx, req.Request)

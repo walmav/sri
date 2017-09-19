@@ -33,6 +33,7 @@ import (
 	spire_common "github.com/spiffe/spire/pkg/common"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
 var (
@@ -86,6 +87,7 @@ type Agent struct {
 	grpcServer    *grpc.Server
 	Cache         cache.Cache
 	pluginCatalog helpers.PluginCatalog
+	serverCerts   []*x509.Certificate
 }
 
 func New(c *Config) *Agent {
@@ -266,9 +268,15 @@ func (a *Agent) attest() (map[string]*spire_common.RegistrationEntry, error) {
 		Csr:          csr,
 	}
 
-	serverResponse, err := nodeClient.FetchBaseSVID(context.Background(), req)
+	peer := new(peer.Peer)
+
+	serverResponse, err := nodeClient.FetchBaseSVID(context.Background(), req, grpc.Peer(peer))
 	if err != nil {
 		return nil, fmt.Errorf("Failed attestation against spire server: %s", err)
+	}
+
+	if tlsInfo, ok := peer.AuthInfo.(credentials.TLSInfo); ok {
+		a.serverCerts = tlsInfo.State.PeerCertificates
 	}
 
 	// Pull base SVID out of the response
@@ -418,11 +426,17 @@ func (a *Agent) getNodeAPIClientConn(mtls bool, svid []byte, key *ecdsa.PrivateK
 		TrustRoots: a.config.TrustBundle,
 	}
 	var tlsCert []tls.Certificate
-	if mtls {
-		tlsCert = append(tlsCert, tls.Certificate{Certificate: [][]byte{svid}, PrivateKey: key})
-	}
-
 	tlsConfig := spiffePeer.NewTLSConfig(tlsCert)
+
+	if mtls {
+		tlsConfig.Certificates = append(tlsCert, tls.Certificate{Certificate: [][]byte{svid}, PrivateKey: key})
+		certPool := x509.NewCertPool()
+		for _, cert := range a.serverCerts {
+			certPool.AddCert(cert)
+		}
+
+		tlsConfig.ClientCAs = certPool
+	}
 
 	if !mtls {
 		tlsConfig.ClientAuth = tls.NoClientCert
