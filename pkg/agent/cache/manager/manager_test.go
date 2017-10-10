@@ -107,22 +107,24 @@ func TestManager_RegEntriesHandler(t *testing.T) {
 	stop <- struct{}{}
 }
 
-func TestManager_ExpiredCacheEntryHandler(t *testing.T) {
-	cm := NewManager(
-		testCache, testServerCerts,
-		serverId, "fakeServerAddr",
-		errorCh, certsFixture.GetTestBaseSVID(), baseSVIDKey, regEntries, testLogger)
-	cm.entryRequestCh = make(chan map[string][]EntryRequest)
-	cm.spiffeIdEntryMap = make(map[string]cache.CacheEntry)
+//func TestManager_ExpiredCacheEntryHandler(t *testing.T) {
+//	cm := NewManager(
+//		testCache, testServerCerts,
+//		serverId, "fakeServerAddr",
+//		errorCh, certsFixture.GetTestBaseSVID(), baseSVIDKey, regEntries, testLogger)
+//	cm.entryRequestCh = make(chan map[string][]EntryRequest)
+//	cm.spiffeIdEntryMap = make(map[string]cache.CacheEntry)
+//
+//	stop := make(chan struct{})
+//	go cm.expiredCacheEntryHandler(3000*time.Millisecond, stop)
+//	cm.managedCache.SetEntry(testCacheEntry)
+//	entryRequest := <-cm.entryRequestCh
+//	assert.NotEmpty(t, entryRequest[testCacheEntry.RegistrationEntry.ParentId])
+//	stop <- struct{}{}
+//
+//}
 
-	stop := make(chan struct{})
-	go cm.expiredCacheEntryHandler(300*time.Millisecond, stop)
-	cm.managedCache.SetEntry(testCacheEntry)
-	entryRequest := <-cm.entryRequestCh
-	assert.NotEmpty(t, entryRequest[testCacheEntry.RegistrationEntry.ParentId])
-	stop <- struct{}{}
 
-}
 
 func TestManager_UpdateCache(t *testing.T) {
 	cm := NewManager(
@@ -131,7 +133,7 @@ func TestManager_UpdateCache(t *testing.T) {
 		errorCh, certsFixture.GetTestBaseSVID(), baseSVIDKey, regEntries, testLogger)
 	stop := make(chan struct{})
 	go cm.UpdateCache(stop)
-	time.Sleep(10*time.Second)
+	//time.Sleep(1*time.Second)
 	//cm.CacheEntryCh = make(chan cache.CacheEntry)
 	//cm.CacheEntryCh<-testCacheEntry
 	//assert.NotEmpty(t,cm.managedCache.Entry([]*common.Selector{
